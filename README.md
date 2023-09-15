@@ -1,5 +1,4 @@
 # Ultimate Modpack Image Database Creator
-
 This tool is designed for Super Smash Bros Ultimate Modpack creators. It generates a database of PNG images for the skins included in your modpack.
 
 ## Getting Started
