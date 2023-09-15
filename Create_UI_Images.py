@@ -3,6 +3,7 @@ import json
 import tkinter as tk
 import subprocess
 import shutil
+import sys
 from tkinter import filedialog
 
 fighter_names = {
@@ -103,8 +104,9 @@ fighter_names = {
 }
 
 
-def export_as_files(base_directory, output_directory, include_jsons_var, keep_paths):
+def export_as_files(base_directory, output_directory, keep_paths):
     paths = {}
+    check = {}
     # Loops through Modpack
     for root, dirs, files in os.walk(base_directory):
         for file_name in files:
@@ -116,6 +118,7 @@ def export_as_files(base_directory, output_directory, include_jsons_var, keep_pa
                 # Add the path to the corresponding mod name in the dictionary
                 if mod_name not in paths:
                     paths[mod_name] = []
+                    print(f"\n{mod_name}")
                 paths[mod_name].append(normalized_path)
 
                 if "chara/chara_1/chara_1_" in normalized_path and "bntx" in normalized_path:
@@ -124,19 +127,19 @@ def export_as_files(base_directory, output_directory, include_jsons_var, keep_pa
                                                                                                       "").replace(
                         "only_", "")
 
-                    fighter = fighter_names[char_name]
-                    os.makedirs(f"{output_directory}/{fighter}", exist_ok=True)
-                    cmd = f"ultimate_tex_cli.exe \"{file_path}\" \"{output_directory}/{fighter}/{skin_pos}__{mod_name}.png\""
-                    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                    if char_name in fighter_names:
+                        fighter = fighter_names[char_name]
+                    else:
+                        fighter = char_name
 
-                    # Check the result
-                    if result.returncode != 0:
-                        return
+                    if skin_pos not in check.get(fighter, set()):
+                        check[fighter] = {skin_pos}
+                        os.makedirs(f"{output_directory}/{fighter}", exist_ok=True)
+                        cmd = f"ultimate_tex_cli.exe \"{file_path}\" \"{output_directory}/{fighter}/{skin_pos}__{mod_name}.png\""
+                        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                        print(f"{fighter}: Created {skin_pos}__{mod_name}.png\n")
 
-                    if include_jsons_var:
-                        json_file_path = "mod_paths.json"
-                        with open(json_file_path, "w") as json_file:
-                            json.dump(paths, json_file, indent=4)
+    return paths
 
 
 def main(entry_base_directory, status_label, include_jsons_var):
@@ -144,11 +147,21 @@ def main(entry_base_directory, status_label, include_jsons_var):
     base_directory = entry_base_directory.get()
     if not os.path.exists(base_directory):
         status_label.config(text="Invalid directory path.", fg="red")
+        print("Invalid directory path.")
         return
 
     keep_paths = ["fighter", "ui", "effect", "sound", "config.json", "stream", "stage", "info.toml", "preview.webp"]
 
-    current_directory = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
+    # Determine the script's directory whether it's running as a script or an executable
+    if getattr(sys, 'frozen', False):
+        current_directory = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+
+    # Replace backslashes with forward slashes for cross-platform compatibility
+    current_directory = current_directory.replace("\\", "/")
+
+    # Set the output directory within the script's directory
     output_directory = f"{current_directory}/output"
 
     # If it exists, remove the entire directory and its contents
@@ -157,8 +170,18 @@ def main(entry_base_directory, status_label, include_jsons_var):
     os.makedirs(output_directory, exist_ok=True)
 
     # Export data as files and folders
-    export_as_files(base_directory, output_directory, include_jsons_var, keep_paths)
-    status_label.config(text=f"Done!!!", fg="green")
+    paths = export_as_files(base_directory, output_directory, keep_paths)
+
+    if include_jsons_var:
+        # Sort the dictionary items by keys (alphabetically)
+        sorted_items = sorted(paths.items())
+        sorted_data = {key: value for key, value in sorted_items}
+
+        with open(f"{current_directory}/Mod_Paths.json", "w") as json_file:
+            json.dump(sorted_data, json_file, indent=4)
+
+    status_label.config(text=f"Done. Output Path: {output_directory}", fg="green")
+    print(f"Done. Output Path: {output_directory}")
 
 
 # Create the main window
